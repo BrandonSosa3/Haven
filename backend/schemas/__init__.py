@@ -5,11 +5,21 @@ from schemas.user import (
     Token,
     TokenData
 )
+from schemas.plaid import (
+    LinkTokenResponse,
+    ExchangePublicTokenRequest,
+    PlaidItemResponse,
+    AccountResponse
+)
 
 __all__ = [
     "UserCreate",
     "UserLogin", 
     "UserResponse",
     "Token",
-    "TokenData"
+    "TokenData",
+    "LinkTokenResponse",
+    "ExchangePublicTokenRequest",
+    "PlaidItemResponse",
+    "AccountResponse"
 ]

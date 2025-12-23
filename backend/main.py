@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from routers import auth_router
+from routers import auth_router, plaid_router
 import os
 from dotenv import load_dotenv
 
@@ -21,6 +21,7 @@ app.add_middleware(
 
 # Register routers
 app.include_router(auth_router)
+app.include_router(plaid_router)
 
 
 @app.get("/")

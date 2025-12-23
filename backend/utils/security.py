@@ -9,7 +9,9 @@ from dotenv import load_dotenv
 load_dotenv('.env.development')
 
 # Password hashing
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# Use a pure-Python, battle-tested scheme that doesn't rely on the external
+# `bcrypt` library to avoid version/backend issues.
+pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
 
 # JWT settings
 SECRET_KEY = os.getenv("JWT_SECRET")
