@@ -1,0 +1,36 @@
+# Environment variables - NEVER commit these
+.env
+.env.local
+.env.development
+.env.production
+.env.staging
+
+# Python
+__pycache__/
+*.py[cod]
+*.so
+.Python
+venv/
+env/
+ENV/
+
+# Database
+*.db
+*.sqlite3
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Node (for frontend later)
+node_modules/
+dist/
+build/
