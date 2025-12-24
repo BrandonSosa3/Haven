@@ -12,6 +12,12 @@ from schemas.plaid import (
     AccountResponse
 )
 
+from schemas.subscription import (
+    SubscriptionCreate,
+    SubscriptionUpdate,
+    SubscriptionResponse
+)
+
 from schemas.transaction import TransactionResponse
 
 __all__ = [
@@ -24,5 +30,8 @@ __all__ = [
     "ExchangePublicTokenRequest",
     "PlaidItemResponse",
     "AccountResponse",
-    "TransactionResponse"
+    "TransactionResponse",
+    "SubscriptionCreate",
+    "SubscriptionUpdate",
+    "SubscriptionResponse"
 ]
