@@ -207,23 +207,62 @@ function Dashboard() {
 
             {showMoreMenu && (
               <div style={styles.dropdown}>
-                {['Gambling', 'Travel', 'Goals', 'Settings'].map(item => (
-                  <a
-                    key={item}
-                    href="#"
-                    style={styles.dropdownItem}
-                    onMouseEnter={(e) => {
-                      e.target.style.background = 'var(--color-background)';
-                      e.target.style.color = 'var(--color-accent)';
-                    }}
-                    onMouseLeave={(e) => {
-                      e.target.style.background = 'transparent';
-                      e.target.style.color = 'var(--color-text-secondary)';
-                    }}
-                  >
-                    {item}
-                  </a>
-                ))}
+                <a
+                  href="/gambling"
+                  style={styles.dropdownItem}
+                  onMouseEnter={(e) => {
+                    e.target.style.background = 'var(--color-background)';
+                    e.target.style.color = 'var(--color-accent)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.target.style.background = 'transparent';
+                    e.target.style.color = 'var(--color-text-secondary)';
+                  }}
+                >
+                  Gambling
+                </a>
+                <a
+                  href="#"
+                  style={styles.dropdownItem}
+                  onMouseEnter={(e) => {
+                    e.target.style.background = 'var(--color-background)';
+                    e.target.style.color = 'var(--color-accent)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.target.style.background = 'transparent';
+                    e.target.style.color = 'var(--color-text-secondary)';
+                  }}
+                >
+                  Travel
+                </a>
+                <a
+                  href="#"
+                  style={styles.dropdownItem}
+                  onMouseEnter={(e) => {
+                    e.target.style.background = 'var(--color-background)';
+                    e.target.style.color = 'var(--color-accent)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.target.style.background = 'transparent';
+                    e.target.style.color = 'var(--color-text-secondary)';
+                  }}
+                >
+                  Goals
+                </a>
+                <a
+                  href="#"
+                  style={styles.dropdownItem}
+                  onMouseEnter={(e) => {
+                    e.target.style.background = 'var(--color-background)';
+                    e.target.style.color = 'var(--color-accent)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.target.style.background = 'transparent';
+                    e.target.style.color = 'var(--color-text-secondary)';
+                  }}
+                >
+                  Settings
+                </a>
               </div>
             )}
           </div>

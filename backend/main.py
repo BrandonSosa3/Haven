@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from routers import auth_router, plaid_router, transactions_router, subscriptions_router
+from routers import auth_router, plaid_router, transactions_router, subscriptions_router, gambling_router
 import os
 from dotenv import load_dotenv
 
@@ -24,6 +24,7 @@ app.include_router(auth_router)
 app.include_router(plaid_router)
 app.include_router(transactions_router)
 app.include_router(subscriptions_router)
+app.include_router(gambling_router)
 
 
 @app.get("/")

@@ -3,5 +3,6 @@ from models.plaid_item import PlaidItem
 from models.account import Account
 from models.transaction import Transaction
 from models.subscription import Subscription
+from models.gambling_session import GamblingSession
 
-__all__ = ["User", "Base", "PlaidItem", "Account", "Transaction", "Subscription"]
+__all__ = ["User", "Base", "PlaidItem", "Account", "Transaction", "Subscription","GamblingSession",]

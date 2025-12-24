@@ -3,6 +3,7 @@ import Login from './pages/auth/Login';
 import Dashboard from './pages/Dashboard';
 import Transactions from './pages/Transactions';
 import Subscriptions from './pages/Subscriptions';
+import Gambling from './pages/Gambling';
 
 function App() {
   return (
@@ -13,6 +14,7 @@ function App() {
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/transactions" element={<Transactions />} />
         <Route path="/subscriptions" element={<Subscriptions />} />
+        <Route path="/gambling" element={<Gambling />} />
       </Routes>
     </BrowserRouter>
   );

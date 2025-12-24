@@ -18,6 +18,13 @@ from schemas.subscription import (
     SubscriptionResponse
 )
 
+from schemas.gambling import (
+    GamblingSessionCreate,
+    GamblingSessionUpdate,
+    GamblingSessionResponse,
+    GamblingStats
+)
+
 from schemas.transaction import TransactionResponse
 
 __all__ = [
@@ -33,5 +40,9 @@ __all__ = [
     "TransactionResponse",
     "SubscriptionCreate",
     "SubscriptionUpdate",
-    "SubscriptionResponse"
+    "SubscriptionResponse",
+    "GamblingSessionCreate",
+    "GamblingSessionUpdate",
+    "GamblingSessionResponse",
+    "GamblingStats",
 ]
