@@ -187,7 +187,7 @@ function Dashboard() {
           <a href="#" style={styles.navLink}>Overview</a>
           <a href="#" style={styles.navLink}>Accounts</a>
           <a href="/transactions" style={styles.navLink}>Transactions</a>
-          <a href="#" style={styles.navLink}>Subscriptions</a>
+          <a href="/subscriptions" style={styles.navLink}>Subscriptions</a>
 
           <div style={{ position: 'relative' }}>
             <button
