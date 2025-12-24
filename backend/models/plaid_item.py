@@ -20,6 +20,7 @@ class PlaidItem(Base):
     # Status
     status = Column(String, default='active')  # active, error, relink_required
     last_synced_at = Column(DateTime)
+    transactions_cursor = Column(String, nullable=True)  # Cursor for Plaid transactions sync
     
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

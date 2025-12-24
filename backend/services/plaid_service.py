@@ -6,6 +6,7 @@ from plaid.model.link_token_create_request import LinkTokenCreateRequest
 from plaid.model.link_token_create_request_user import LinkTokenCreateRequestUser
 from plaid.model.item_public_token_exchange_request import ItemPublicTokenExchangeRequest
 from plaid.model.accounts_get_request import AccountsGetRequest
+from plaid.model.transactions_sync_request import TransactionsSyncRequest
 import os
 from dotenv import load_dotenv
 
@@ -88,4 +89,21 @@ def get_accounts(access_token: str):
         return response.to_dict()
     except plaid.ApiException as e:
         print(f"Error getting accounts: {e}")
+        raise
+
+def sync_transactions(access_token: str, cursor: str = None):
+    """Sync transactions using Plaid's sync endpoint"""
+    try:
+        # For first sync (cursor is None), use empty string
+        # Plaid requires a string, not None
+        cursor_value = cursor if cursor is not None else ""
+        
+        request = TransactionsSyncRequest(
+            access_token=access_token,
+            cursor=cursor_value
+        )
+        response = client.transactions_sync(request)
+        return response.to_dict()
+    except plaid.ApiException as e:
+        print(f"Error syncing transactions: {e}")
         raise

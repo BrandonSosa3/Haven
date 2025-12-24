@@ -12,6 +12,8 @@ from schemas.plaid import (
     AccountResponse
 )
 
+from schemas.transaction import TransactionResponse
+
 __all__ = [
     "UserCreate",
     "UserLogin", 
@@ -21,5 +23,6 @@ __all__ = [
     "LinkTokenResponse",
     "ExchangePublicTokenRequest",
     "PlaidItemResponse",
-    "AccountResponse"
+    "AccountResponse",
+    "TransactionResponse"
 ]
