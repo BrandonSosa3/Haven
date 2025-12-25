@@ -222,7 +222,7 @@ function Dashboard() {
                   Gambling
                 </a>
                 <a
-                  href="#"
+                  href="/travel"
                   style={styles.dropdownItem}
                   onMouseEnter={(e) => {
                     e.target.style.background = 'var(--color-background)';
