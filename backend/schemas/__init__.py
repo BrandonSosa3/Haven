@@ -25,6 +25,12 @@ from schemas.gambling import (
     GamblingStats
 )
 
+from schemas.goal import (
+    GoalCreate,
+    GoalUpdate,
+    GoalResponse
+)
+
 from schemas.transaction import TransactionResponse
 
 __all__ = [
@@ -45,4 +51,7 @@ __all__ = [
     "GamblingSessionUpdate",
     "GamblingSessionResponse",
     "GamblingStats",
+    "GoalCreate",
+    "GoalUpdate",
+    "GoalResponse",
 ]

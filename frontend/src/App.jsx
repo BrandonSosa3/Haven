@@ -5,7 +5,8 @@ import Transactions from './pages/Transactions';
 import Subscriptions from './pages/Subscriptions';
 import Gambling from './pages/Gambling';
 import Travel from './pages/Travel';
-
+import Accounts from './pages/Accounts';
+import Goals from './pages/Goals';
 function App() {
   return (
     <BrowserRouter>
@@ -17,6 +18,8 @@ function App() {
         <Route path="/subscriptions" element={<Subscriptions />} />
         <Route path="/gambling" element={<Gambling />} />
         <Route path="/travel" element={<Travel />} />
+        <Route path="/accounts" element={<Accounts />} />
+        <Route path="/goals" element={<Goals />} />
       </Routes>
     </BrowserRouter>
   );

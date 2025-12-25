@@ -93,3 +93,25 @@ def get_user_accounts(
     """Get all accounts for the current user"""
     accounts = db.query(Account).filter(Account.user_id == current_user.id).all()
     return accounts
+
+@router.post("/accounts/manual", response_model=AccountResponse)
+def create_manual_account(
+    name: str,
+    type: str,
+    current_balance: float,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Create a manual account (cash, etc.)"""
+    account = Account(
+        user_id=current_user.id,
+        name=name,
+        type=type,
+        subtype=type,
+        current_balance=current_balance,
+        is_manual=True
+    )
+    db.add(account)
+    db.commit()
+    db.refresh(account)
+    return account
