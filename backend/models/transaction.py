@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, DateTime, Numeric, Boolean, ForeignKey, Text
+from sqlalchemy import Column, String, DateTime, Numeric, Boolean, ForeignKey, Text, Integer
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from datetime import datetime
@@ -11,29 +11,29 @@ class Transaction(Base):
     
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id = Column(UUID(as_uuid=True), ForeignKey('users.id'), nullable=False)
-    account_id = Column(UUID(as_uuid=True), ForeignKey('accounts.id'), nullable=False)
+    account_id = Column(UUID(as_uuid=True), ForeignKey('accounts.id'), nullable=True)
     
-    # Plaid identifiers (null if manual transaction)
+    # Plaid data
     plaid_transaction_id = Column(String, unique=True, nullable=True)
     
     # Transaction details
+    amount = Column(Numeric(12, 2), nullable=False)
     date = Column(DateTime, nullable=False)
-    amount = Column(Numeric(12, 2), nullable=False)  # negative = expense, positive = income
-    merchant_name = Column(String)
-    description = Column(String, nullable=False)
+    description = Column(String, nullable=True)
+    merchant_name = Column(String, nullable=True)
     
-    # Categorization
-    category = Column(String)  # From Plaid or user-defined
-    user_category = Column(String)  # User override
+    # Categories
+    category = Column(String, nullable=True)  # From Plaid
+    category_detailed = Column(String, nullable=True)
     
+    # User categorization (for budgeting)
+    user_bucket = Column(String, nullable=True)  # needs, wants, savings, income, ignore
+    user_category = Column(String, nullable=True)  # groceries, dining, rent, etc.
+    budget_period = Column(String, nullable=True)  # weekly, monthly (for weekly/biweekly budgets)
     # Status
     pending = Column(Boolean, default=False)
     
-    # Notes
-    notes = Column(Text)
-    
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     # Relationships
     user = relationship("User", backref="transactions")

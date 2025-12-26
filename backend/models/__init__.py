@@ -5,5 +5,7 @@ from models.transaction import Transaction
 from models.subscription import Subscription
 from models.gambling_session import GamblingSession
 from models.goal import Goal
+from models.budget import Budget, BudgetCategory
 
-__all__ = ["User", "Base", "PlaidItem", "Account", "Transaction", "Subscription","GamblingSession","Goal"]
+__all__ = ["User", "Base", "PlaidItem", "Account", "Transaction", "Subscription","GamblingSession","Goal","Budget",
+"BudgetCategory",]

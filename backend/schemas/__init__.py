@@ -33,6 +33,23 @@ from schemas.goal import (
 
 from schemas.transaction import TransactionResponse
 
+from schemas.budget import (
+    BudgetPeriodSetup,
+    BudgetCategoryCreate,
+    BudgetCreate,
+    BudgetResponse,
+    BudgetCategoryResponse
+)
+
+from schemas.categorization import (
+    BudgetCategoryCreate,
+    BudgetCategoryResponse,
+    TransactionCategorize,
+    CategorizationSuggestion,
+    CategorizationProgress
+)
+
+
 __all__ = [
     "UserCreate",
     "UserLogin", 
@@ -54,4 +71,15 @@ __all__ = [
     "GoalCreate",
     "GoalUpdate",
     "GoalResponse",
+    "SpendingInsightResponse",
+    "SpendingSummaryResponse",
+    "BudgetSuggestion",
+    "BudgetCreate",
+    "BudgetResponse",
+    "BudgetCategoryCreate",
+    "BudgetCategoryResponse",
+    "TransactionCategorize",
+    "CategorizationSuggestion",
+    "CategorizationProgress",
+    "BudgetPeriodSetup",
 ]

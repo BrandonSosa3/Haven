@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from datetime import datetime
 from uuid import UUID
 from typing import Optional
@@ -6,14 +6,18 @@ from typing import Optional
 
 class TransactionResponse(BaseModel):
     id: UUID
-    account_id: UUID
-    date: datetime
+    account_id: Optional[UUID] = None  # Make this optional
+    plaid_transaction_id: Optional[str] = None
     amount: float
-    merchant_name: Optional[str]
-    description: str
-    category: Optional[str]
-    user_category: Optional[str]
-    pending: bool
+    date: datetime
+    description: Optional[str] = None
+    merchant_name: Optional[str] = None
+    category: Optional[str] = None
+    category_detailed: Optional[str] = None
+    user_bucket: Optional[str] = None  # Add these if not present
+    user_category: Optional[str] = None
+    pending: bool = False
+    created_at: datetime
     
     class Config:
         from_attributes = True

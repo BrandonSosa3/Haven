@@ -25,7 +25,7 @@ function Login() {
         },
       });
 
-      localStorage.setItem('access_token', response.data.access_token);
+      localStorage.setItem('token', response.data.access_token);
       navigate('/dashboard');
     } catch (err) {
       setError(err.response?.data?.detail || 'Login failed');

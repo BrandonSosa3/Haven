@@ -4,5 +4,7 @@ from routers.transactions import router as transactions_router
 from routers.subscriptions import router as subscriptions_router
 from routers.gambling import router as gambling_router
 from routers.goals import router as goals_router
+from routers.budget import router as budget_router
 
-__all__ = ["auth_router", "plaid_router", "transactions_router""subscriptions_router","gambling_router","goals_router",]
+
+__all__ = ["auth_router", "plaid_router", "transactions_router""subscriptions_router","gambling_router","goals_router","budget_router",]

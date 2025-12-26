@@ -7,6 +7,7 @@ import Gambling from './pages/Gambling';
 import Travel from './pages/Travel';
 import Accounts from './pages/Accounts';
 import Goals from './pages/Goals';
+import Budget from './pages/Budget';
 function App() {
   return (
     <BrowserRouter>
@@ -20,6 +21,7 @@ function App() {
         <Route path="/travel" element={<Travel />} />
         <Route path="/accounts" element={<Accounts />} />
         <Route path="/goals" element={<Goals />} />
+        <Route path="/budget" element={<Budget />} />
       </Routes>
     </BrowserRouter>
   );

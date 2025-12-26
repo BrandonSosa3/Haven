@@ -1,36 +1,31 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from routers import auth_router, plaid_router, transactions_router, subscriptions_router, gambling_router, goals_router
-import os
-from dotenv import load_dotenv
-
-# Load environment variables
-load_dotenv('.env.development')
-
+from database import engine
+from models import Base
+from routers import auth_router, plaid_router, transactions_router, subscriptions_router, gambling_router, goals_router, budget_router
 app = FastAPI(title="Haven API")
 
-# Configure CORS
-CORS_ORIGINS = os.getenv("CORS_ORIGINS", "http://localhost:5173").split(",")
+# Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=CORS_ORIGINS,
+    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],  # Frontend URLs
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Register routers
+# Create tables
+Base.metadata.create_all(bind=engine)
+
+# Include routers
 app.include_router(auth_router)
 app.include_router(plaid_router)
 app.include_router(transactions_router)
 app.include_router(subscriptions_router)
 app.include_router(gambling_router)
 app.include_router(goals_router)
-
+app.include_router(budget_router)
 
 @app.get("/")
-def root():
-    return {
-        "message": "Haven API is running!",
-        "version": "0.1.0"
-    }
+def read_root():
+    return {"message": "Haven API"}

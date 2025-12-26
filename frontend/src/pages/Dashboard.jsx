@@ -326,6 +326,7 @@ function Dashboard() {
         <div style={styles.logo}>HAVEN</div>
         <div style={styles.navLinks}>
           <a href="/dashboard" style={styles.navLink}>Overview</a>
+          <a href="/budget" style={styles.navLink}>Budget</a>
           <a href="/accounts" style={styles.navLink}>Accounts</a>
           <a href="/transactions" style={styles.navLink}>Transactions</a>
           <a href="/subscriptions" style={styles.navLink}>Subscriptions</a>
