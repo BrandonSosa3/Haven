@@ -3,16 +3,22 @@ import { useNavigate } from 'react-router-dom';
 import api from '../utils/api';
 import BudgetPeriodSelector from '../components/budget/BudgetPeriodSelector';
 import TransactionCategorizer from '../components/budget/TransactionCategorizer';
-import BudgetSummary from '../components/budget/BudgetSummary';
+import BudgetDashboard from '../components/budget/BudgetDashboard';
+import MonthNavigation from '../components/budget/MonthNavigation';
+import TransactionsList from '../components/budget/TransactionsList';
 
 function Budget() {
-  const [step, setStep] = useState('loading'); // loading, period-setup, categorization, summary, dashboard
+  const [step, setStep] = useState('loading');
   const [periodConfig, setPeriodConfig] = useState(null);
   const [uncategorizedTxns, setUncategorizedTxns] = useState([]);
   const [currentTxnIndex, setCurrentTxnIndex] = useState(0);
   const [categories, setCategories] = useState([]);
   const [budget, setBudget] = useState(null);
   const [summary, setSummary] = useState(null);
+  const [budgetHistory, setBudgetHistory] = useState([]); // Add this
+  const [selectedBudgetId, setSelectedBudgetId] = useState(null); // Add this
+  const [showTransactions, setShowTransactions] = useState(false);
+  const [currentMonthTransactions, setCurrentMonthTransactions] = useState([]);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -21,107 +27,99 @@ function Budget() {
 
   const checkBudgetStatus = async () => {
     try {
-      // First, check if we have a saved periodConfig - this takes priority
-      const savedConfig = localStorage.getItem('budgetPeriodConfig');
-      let periodConfig = null;
-      if (savedConfig) {
-        try {
-          periodConfig = JSON.parse(savedConfig);
-          setPeriodConfig(periodConfig);
-        } catch (e) {
-          console.error('Failed to parse saved config:', e);
-        }
-      }
+      console.log('[BUDGET] Checking budget status...');
 
+      // Auto-create current month budget if needed
+      try {
+        const autoCreateRes = await api.post('/budget/auto-create-current-month');
+        if (autoCreateRes.data.created) {
+          console.log('[BUDGET] Auto-created budget:', autoCreateRes.data.message);
+        }
+      } catch (autoErr) {
+        console.error('[BUDGET] Auto-create failed:', autoErr);
+        // Continue anyway
+      }
+      
       const statusRes = await api.get('/budget/check-setup');
+      console.log('[BUDGET] Status:', statusRes.data);
       
       if (statusRes.data.has_budget) {
-        // User has budget, load dashboard
-        try {
-          const budgetRes = await api.get('/budget/current');
-          setBudget(budgetRes.data);
-          setStep('dashboard');
-          return; // Exit early if we have a budget
-        } catch (budgetErr) {
-          // If current budget fetch fails, treat as no budget and continue
-          console.error('Failed to fetch current budget:', budgetErr);
+        // User has an active budget
+        console.log('[BUDGET] Budget exists, loading dashboard...');
+        const budgetRes = await api.get('/budget/current');
+        setBudget(budgetRes.data);
+        
+        // Load budget history
+        const historyRes = await api.get('/budget/history');
+        setBudgetHistory(historyRes.data);
+        console.log('[BUDGET] History loaded:', historyRes.data.length, 'budgets');
+        
+        // Load summary for current budget
+        const summaryRes = await api.get('/budget/summary');
+        setSummary(summaryRes.data);
+        setSelectedBudgetId(budgetRes.data.id);
+        console.log('[BUDGET] Summary loaded:', summaryRes.data);
+        
+        // Also load uncategorized count for notification
+        if (statusRes.data.needs_categorization) {
+          const txnsRes = await api.get('/budget/uncategorized-transactions');
+          setUncategorizedTxns(txnsRes.data);
+          console.log('[BUDGET] Found', txnsRes.data.length, 'new uncategorized transactions');
         }
-      }
-      
-      // If we have periodConfig saved, always try to load transactions and show categorization
-      if (periodConfig) {
-        try {
-          const [txnsRes, catsRes] = await Promise.all([
-            api.get('/budget/uncategorized-transactions').catch(() => ({ data: [] })),
-            api.get('/budget/categories').catch(() => ({ data: [] }))
-          ]);
-          
-          setUncategorizedTxns(txnsRes.data || []);
-          setCategories(catsRes.data || []);
-          
-          // Always show categorization if we have periodConfig, even if no transactions
-          // The categorizer will handle the empty state
-          setStep('categorization');
-        } catch (loadErr) {
-          console.error('Failed to load transactions/categories:', loadErr);
-          // Still show categorization if we have periodConfig
-          setStep('categorization');
-        }
+        
+        setStep('dashboard');
       } else if (statusRes.data.needs_categorization) {
-        // User needs to categorize transactions but no saved config
+        // First time setup - no budget yet
+        console.log('[BUDGET] First time setup - need to categorize...');
+        
         const txnsRes = await api.get('/budget/uncategorized-transactions');
-        setUncategorizedTxns(txnsRes.data || []);
+        console.log('[BUDGET] Uncategorized transactions:', txnsRes.data.length);
+        setUncategorizedTxns(txnsRes.data);
         
         const catsRes = await api.get('/budget/categories');
-        setCategories(catsRes.data || []);
+        console.log('[BUDGET] Existing categories:', catsRes.data.length);
+        setCategories(catsRes.data);
         
-        setStep('period-setup');
+        // Check if period config exists
+        const savedConfig = localStorage.getItem('budgetPeriodConfig');
+        
+        if (!savedConfig) {
+          console.log('[BUDGET] Show period selector');
+          setStep('period-setup');
+        } else {
+          console.log('[BUDGET] Continue to categorization');
+          setPeriodConfig(JSON.parse(savedConfig));
+          setStep('categorization');
+        }
       } else {
         // No transactions yet
+        console.log('[BUDGET] No data available');
         setStep('no-data');
       }
     } catch (err) {
-      console.error('Failed to check budget status:', err);
+      console.error('[BUDGET] Error checking status:', err);
       if (err.response?.status === 401) {
         navigate('/login');
       } else {
-        // On error, try to load from localStorage
-        const savedConfig = localStorage.getItem('budgetPeriodConfig');
-        if (savedConfig) {
-          try {
-            const parsedConfig = JSON.parse(savedConfig);
-            setPeriodConfig(parsedConfig);
-            // Try to load transactions
-            api.get('/budget/uncategorized-transactions').then(res => {
-              setUncategorizedTxns(res.data || []);
-              api.get('/budget/categories').then(catsRes => {
-                setCategories(catsRes.data || []);
-                setStep('categorization');
-              }).catch(() => setStep('categorization'));
-            }).catch(() => {
-              setStep('categorization');
-            });
-          } catch {
-            setStep('no-data');
-          }
-        } else {
-          setStep('no-data');
-        }
+        setStep('error');
       }
     }
   };
 
   const handlePeriodSetup = (config) => {
+    console.log('[BUDGET] Period setup completed:', config);
     setPeriodConfig(config);
     localStorage.setItem('budgetPeriodConfig', JSON.stringify(config));
     
     // Load uncategorized transactions
     api.get('/budget/uncategorized-transactions').then(res => {
+      console.log('[BUDGET] Loaded transactions for categorization:', res.data.length);
       setUncategorizedTxns(res.data);
     });
     
     // Load categories
     api.get('/budget/categories').then(res => {
+      console.log('[BUDGET] Loaded existing categories:', res.data.length);
       setCategories(res.data);
     });
     
@@ -130,12 +128,15 @@ function Budget() {
 
   const handleCreateCategory = async (bucket, name) => {
     try {
+      console.log('[BUDGET] Creating category:', { bucket, name });
       const res = await api.post('/budget/categories', {
         name: name,
         bucket: bucket
       });
       
       const newCategory = res.data;
+      console.log('[BUDGET] Category created:', newCategory);
+      
       // Check if category already exists in state to avoid duplicates
       const exists = categories.some(
         c => c.id === newCategory.id || 
@@ -144,25 +145,52 @@ function Budget() {
       
       if (!exists) {
         setCategories([...categories, newCategory]);
+        console.log('[BUDGET] Category added to state');
       } else {
-        // Refresh categories list to ensure we have the latest
+        console.log('[BUDGET] Category already exists, refreshing list');
         const catsRes = await api.get('/budget/categories');
         setCategories(catsRes.data || []);
       }
       
-      return newCategory; // Return it so TransactionCategorizer can use it
+      return newCategory;
     } catch (err) {
-      console.error('Failed to create category:', err);
-      // If creation fails due to duplicate, refresh categories list
+      console.error('[BUDGET] Failed to create category:', err);
       if (err.response?.status === 400) {
         try {
           const catsRes = await api.get('/budget/categories');
           setCategories(catsRes.data || []);
         } catch (refreshErr) {
-          console.error('Failed to refresh categories:', refreshErr);
+          console.error('[BUDGET] Failed to refresh categories:', refreshErr);
         }
       }
       throw err;
+    }
+  };
+
+  const loadCurrentMonthTransactions = async () => {
+    try {
+      console.log('[BUDGET] Loading transactions for current month...');
+      
+      // Get the currently selected budget
+      const budgetData = budgetHistory.find(b => b.id === selectedBudgetId);
+      if (!budgetData) return;
+      
+      const txnsRes = await api.get('/transactions');
+      
+      // Filter to current month
+      const periodStart = new Date(budgetData.period_start);
+      const periodEnd = new Date(budgetData.period_end);
+      
+      const monthTransactions = txnsRes.data.filter(t => {
+        const txnDate = new Date(t.date);
+        return txnDate >= periodStart && txnDate <= periodEnd;
+      });
+      
+      console.log('[BUDGET] Found', monthTransactions.length, 'transactions for', budgetData.month);
+      setCurrentMonthTransactions(monthTransactions);
+      setShowTransactions(true);
+    } catch (err) {
+      console.error('[BUDGET] Failed to load transactions:', err);
     }
   };
 
@@ -170,165 +198,148 @@ function Budget() {
     const currentTxn = uncategorizedTxns[currentTxnIndex];
     
     if (!currentTxn) {
-      console.error('No current transaction to categorize');
+      console.error('[BUDGET] No current transaction to categorize');
       return;
     }
     
+    console.log('[BUDGET] Categorizing transaction:', {
+      id: currentTxn.id,
+      amount: currentTxn.amount,
+      categorization
+    });
+    
     try {
       await api.put(`/budget/transactions/${currentTxn.id}/categorize`, categorization);
+      console.log('[BUDGET] Transaction categorized successfully');
       
-      // Refresh categories list in case a new one was auto-created
+      // Refresh categories in case one was auto-created
       try {
         const catsRes = await api.get('/budget/categories');
         setCategories(catsRes.data || []);
       } catch (catsErr) {
-        console.error('Failed to refresh categories:', catsErr);
+        console.error('[BUDGET] Failed to refresh categories:', catsErr);
       }
       
-      // Remove the categorized transaction from the list
-      const updatedTxns = uncategorizedTxns.filter((_, idx) => idx !== currentTxnIndex);
-      setUncategorizedTxns(updatedTxns);
-      
-      // Move to next transaction (don't increment index since we removed one)
-      if (updatedTxns.length > 0) {
-        // Stay at same index (which is now the next transaction)
-        if (currentTxnIndex >= updatedTxns.length) {
-          setCurrentTxnIndex(updatedTxns.length - 1);
-        }
+      // Move to next transaction
+      if (currentTxnIndex < uncategorizedTxns.length - 1) {
+        console.log('[BUDGET] Moving to next transaction');
+        setCurrentTxnIndex(currentTxnIndex + 1);
       } else {
-        // Check if there are more uncategorized transactions
-        try {
-          const refreshRes = await api.get('/budget/uncategorized-transactions');
-          if (refreshRes.data && refreshRes.data.length > 0) {
-            setUncategorizedTxns(refreshRes.data);
-            setCurrentTxnIndex(0);
-          } else {
-            // All done! Show summary
-            await loadSummary();
-          }
-        } catch (refreshErr) {
-          // If refresh fails, try to show summary
-          await loadSummary();
+        console.log('[BUDGET] All transactions categorized!');
+        
+        // If budget already exists, reload dashboard with updated data
+        if (budget) {
+          console.log('[BUDGET] Budget exists, reloading summary...');
+          const summaryRes = await api.get('/budget/summary');
+          setSummary(summaryRes.data);
+          setUncategorizedTxns([]);
+          setStep('dashboard');
+        } else {
+          // First time setup - create budget
+          console.log('[BUDGET] Creating budget...');
+          await createBudget();
         }
       }
     } catch (err) {
-      console.error('Failed to categorize:', err);
+      console.error('[BUDGET] Failed to categorize:', err);
       const errorMsg = err.response?.data?.detail || err.message || 'Failed to categorize transaction';
       alert(`Error: ${errorMsg}`);
     }
   };
-
-  const loadSummary = async () => {
+  const handleRecategorize = async (transactionId, categorization) => {
     try {
-      const summaryRes = await api.get('/budget/pre-budget-summary');
-      setSummary(summaryRes.data);
-      setStep('summary');
-    } catch (err) {
-      console.error('Failed to load summary:', err);
-      // If summary fails, just create budget
-      await createBudget();
-    }
-  };
-
-  const resetCategorizations = async () => {
-    if (!confirm('Are you sure you want to reset all transaction categorizations? This will unassign all transactions.')) {
-      return;
-    }
-    
-    try {
-      const res = await api.post('/budget/transactions/reset-categorizations');
-      alert(`Successfully reset ${res.data.reset_count} transactions`);
+      console.log('[BUDGET] Re-categorizing transaction:', transactionId, categorization);
       
-      // Clear period config to restart
-      localStorage.removeItem('budgetPeriodConfig');
-      setPeriodConfig(null);
-      setSummary(null);
-      
-      // Reload uncategorized transactions and refresh
-      const txnsRes = await api.get('/budget/uncategorized-transactions');
-      setUncategorizedTxns(txnsRes.data || []);
-      setCurrentTxnIndex(0);
-      
-      // Reload categories
-      const catsRes = await api.get('/budget/categories');
-      setCategories(catsRes.data || []);
-      
-      // Go back to period setup
-      setStep('period-setup');
-    } catch (err) {
-      console.error('Failed to reset categorizations:', err);
-      alert('Failed to reset categorizations');
-    }
-  };
-
-  const resetEverything = async () => {
-    if (!confirm('⚠️ WARNING: This will completely reset your budget setup!\n\nThis will:\n- Deactivate all budgets\n- Unassign all transactions\n- Delete all categories\n\nAre you sure you want to continue?')) {
-      return;
-    }
-    
-    try {
-      const res = await api.post('/budget/reset-all');
-      
-      // Clear everything from localStorage
-      localStorage.removeItem('budgetPeriodConfig');
-      
-      // Reset all state
-      setPeriodConfig(null);
-      setSummary(null);
-      setBudget(null);
-      setCategories([]);
-      setUncategorizedTxns([]);
-      setCurrentTxnIndex(0);
-      
-      // Reload and go to period setup
-      await checkBudgetStatus();
-      
-      alert(`Successfully reset everything!\n\n- ${res.data.budgets_deactivated} budgets deactivated\n- ${res.data.transactions_reset} transactions reset\n- ${res.data.categories_deleted} categories deleted`);
-    } catch (err) {
-      console.error('Failed to reset everything:', err);
-      alert('Failed to reset everything');
-    }
-  };
-
-  const createBudget = async () => {
-    try {
-      // Use income from summary (which is already filtered to last full month)
-      // Or calculate from transactions filtered to last full month
-      const now = new Date();
-      let lastFullMonth, lastFullYear;
-      
-      if (now.getMonth() === 0) { // January
-        lastFullMonth = 11; // December (0-indexed)
-        lastFullYear = now.getFullYear() - 1;
-      } else {
-        lastFullMonth = now.getMonth() - 1;
-        lastFullYear = now.getFullYear();
+      // Auto-create category if it doesn't exist
+      if (categorization.category && categorization.bucket !== 'ignore') {
+        const categoryExists = categories.some(
+          c => c.name.toLowerCase() === categorization.category.toLowerCase() && 
+          c.bucket === categorization.bucket
+        );
+        
+        if (!categoryExists) {
+          console.log('[BUDGET] Creating new category:', categorization.category);
+          await api.post('/budget/categories', {
+            name: categorization.category,
+            bucket: categorization.bucket
+          });
+          
+          // Reload categories
+          const catsRes = await api.get('/budget/categories');
+          setCategories(catsRes.data);
+        }
       }
       
-      const firstDay = new Date(lastFullYear, lastFullMonth, 1);
-      const lastDay = new Date(lastFullYear, lastFullMonth + 1, 0, 23, 59, 59);
+      await api.put(`/budget/transactions/${transactionId}/categorize`, categorization);
       
-      // Get transactions and filter to last full month
+      console.log('[BUDGET] Re-categorization successful, refreshing...');
+      
+      // Reload summary for current budget
+      await loadBudgetById(selectedBudgetId);
+      
+      // Reload transactions list
+      await loadCurrentMonthTransactions();
+      
+    } catch (err) {
+      console.error('[BUDGET] Failed to re-categorize:', err);
+      alert('Failed to update transaction');
+    }
+  };
+  const createBudget = async () => {
+    try {
+      console.log('[BUDGET] Creating budget...');
+      
+      // Determine which month's budget we're creating
+      const now = new Date();
+      const currentMonth = now.getMonth(); // 0-11
+      const currentYear = now.getFullYear();
+      
+      // Budget period: First day of current month to last day of current month
+      const periodStart = new Date(currentYear, currentMonth, 1);
+      const periodEnd = new Date(currentYear, currentMonth + 1, 0, 23, 59, 59); // Last day of month
+      
+      console.log('[BUDGET] Period:', periodStart, 'to', periodEnd);
+      
+      // Calculate total income from last full month (for targets)
+      let lastMonth, lastYear;
+      if (currentMonth === 0) { // January
+        lastMonth = 11; // December
+        lastYear = currentYear - 1;
+      } else {
+        lastMonth = currentMonth - 1;
+        lastYear = currentYear;
+      }
+      
+      const lastMonthStart = new Date(lastYear, lastMonth, 1);
+      const lastMonthEnd = new Date(lastYear, lastMonth + 1, 0, 23, 59, 59);
+      
+      console.log('[BUDGET] Calculating income from last month:', lastMonthStart, 'to', lastMonthEnd);
+      
+      // Get transactions and filter to last full month for income estimate
       const txnsRes = await api.get('/transactions');
-      const totalIncome = txnsRes.data
+      const lastMonthIncome = txnsRes.data
         .filter(t => {
           const txnDate = new Date(t.date);
           return t.user_bucket === 'income' && 
                  parseFloat(t.amount) > 0 &&
-                 txnDate >= firstDay && 
-                 txnDate <= lastDay;
+                 txnDate >= lastMonthStart && 
+                 txnDate <= lastMonthEnd;
         })
         .reduce((sum, t) => sum + parseFloat(t.amount), 0);
       
+      console.log('[BUDGET] Last month income:', lastMonthIncome);
+      
       await api.post('/budget/', {
-        period_type: periodConfig.periodType,
-        has_monthly_obligations: periodConfig.hasMonthlyObligations,
-        period_start_date: periodConfig.periodStartDate,
-        total_income: totalIncome || 1000, // Default to 1000 if no income found
+        period_type: 'monthly',
+        has_monthly_obligations: false,
+        period_start_date: periodStart.toISOString(),
+        total_income: lastMonthIncome || 1000, // Use last month's income as estimate
         needs_percentage: 50,
         wants_percentage: 30,
         savings_percentage: 20
       });
+      
+      console.log('[BUDGET] Budget created successfully');
       
       // Clear period config
       localStorage.removeItem('budgetPeriodConfig');
@@ -336,8 +347,80 @@ function Budget() {
       // Reload to dashboard
       window.location.reload();
     } catch (err) {
-      console.error('Failed to create budget:', err);
+      console.error('[BUDGET] Failed to create budget:', err);
       alert('Failed to create budget');
+    }
+  };
+
+  const loadBudgetById = async (budgetId) => {
+    try {
+      console.log('[BUDGET] Loading budget:', budgetId);
+      
+      // Find the budget in history
+      const budgetData = budgetHistory.find(b => b.id === budgetId);
+      if (!budgetData) {
+        console.error('[BUDGET] Budget not found in history');
+        return;
+      }
+      
+      console.log('[BUDGET] Selected budget:', budgetData.month);
+      
+      // Create a budget object from history data
+      const budgetObj = {
+        id: budgetData.id,
+        period_type: 'monthly',
+        has_monthly_obligations: false,
+        period_start_date: budgetData.period_start,
+        next_period_date: budgetData.period_end,
+        total_income: budgetData.total_income,
+        is_active: budgetData.is_active
+      };
+      
+      setBudget(budgetObj);
+      
+      // Load summary for this budget
+      const summaryRes = await api.get(`/budget/${budgetId}/summary`);
+      console.log('[BUDGET] Summary loaded for', budgetData.month);
+      
+      setSummary(summaryRes.data);
+      setSelectedBudgetId(budgetId);
+      
+      // Check for uncategorized transactions only if viewing current budget
+      if (budgetData.is_active) {
+        const statusRes = await api.get('/budget/check-setup');
+        if (statusRes.data.needs_categorization) {
+          const txnsRes = await api.get('/budget/uncategorized-transactions');
+          setUncategorizedTxns(txnsRes.data);
+        } else {
+          setUncategorizedTxns([]);
+        }
+      } else {
+        setUncategorizedTxns([]); // No uncategorized for past months
+      }
+    } catch (err) {
+      console.error('[BUDGET] Failed to load budget:', err);
+    }
+  };
+
+  const resetEverything = async () => {
+    if (!confirm('⚠️ WARNING: This will completely reset your budget setup!\n\nAre you sure?')) {
+      return;
+    }
+    
+    try {
+      console.log('[BUDGET] Resetting everything...');
+      
+      const res = await api.post('/budget/reset-all');
+      console.log('[BUDGET] Reset response:', res.data);
+      
+      // Clear localStorage
+      localStorage.removeItem('budgetPeriodConfig');
+      
+      // Reload
+      window.location.reload();
+    } catch (err) {
+      console.error('[BUDGET] Failed to reset:', err);
+      alert('Failed to reset. Please try again.');
     }
   };
 
@@ -417,6 +500,18 @@ function Budget() {
           </div>
         )}
 
+        {step === 'error' && (
+          <div style={styles.card}>
+            <h1 style={styles.title}>Something Went Wrong</h1>
+            <p style={styles.subtitle}>
+              Unable to load budget. Please try refreshing the page.
+            </p>
+            <button onClick={() => window.location.reload()} style={styles.button}>
+              Refresh
+            </button>
+          </div>
+        )}
+
         {step === 'no-data' && (
           <div style={styles.card}>
             <h1 style={styles.title}>No Transactions Yet</h1>
@@ -433,22 +528,30 @@ function Budget() {
           <BudgetPeriodSelector onComplete={handlePeriodSetup} />
         )}
 
-        {step === 'categorization' && periodConfig && (
+        {step === 'categorization' && (
           <>
-            <div style={{ marginBottom: '1rem', textAlign: 'right' }}>
-              <button
-                onClick={resetCategorizations}
-                style={{
-                  ...styles.button,
-                  background: 'var(--color-border)',
-                  fontSize: '11px',
-                  padding: '8px 16px'
-                }}
-              >
-                Reset All Categorizations
-              </button>
-            </div>
-            {currentTxn ? (
+            {budget && (
+              <div style={{ marginBottom: '1rem', textAlign: 'center' }}>
+                <button
+                  onClick={() => {
+                    setStep('dashboard');
+                    setCurrentTxnIndex(0);
+                  }}
+                  style={{
+                    ...styles.button,
+                    background: 'transparent',
+                    border: '1px solid var(--color-border)',
+                    color: 'var(--color-text-secondary)',
+                    fontSize: '11px',
+                    padding: '8px 16px'
+                  }}
+                >
+                  ← Back to Dashboard
+                </button>
+              </div>
+            )}
+            
+            {periodConfig && currentTxn && (
               <TransactionCategorizer
                 transaction={currentTxn}
                 categories={categories}
@@ -458,62 +561,115 @@ function Budget() {
                 onCreateCategory={handleCreateCategory}
                 progress={progress}
               />
-            ) : (
-              <div style={styles.card}>
-                <h1 style={styles.title}>All Transactions Categorized</h1>
-                <p style={styles.subtitle}>
-                  Loading summary...
-                </p>
-              </div>
             )}
           </>
         )}
 
-        {step === 'summary' && summary && periodConfig && (
-          <BudgetSummary
-            summary={summary}
-            periodConfig={periodConfig}
-            onCreateBudget={createBudget}
-            onBack={() => {
-              // Go back to categorization
-              api.get('/budget/uncategorized-transactions').then(res => {
-                if (res.data && res.data.length > 0) {
-                  setUncategorizedTxns(res.data);
-                  setCurrentTxnIndex(0);
-                  setStep('categorization');
-                } else {
-                  // No uncategorized, but allow going back
-                  setStep('categorization');
-                }
-              }).catch(() => setStep('categorization'));
-            }}
-          />
-        )}
-
-        {step === 'dashboard' && (
-          <div style={styles.card}>
-            <h1 style={styles.title}>Budget Dashboard</h1>
-            <p style={styles.subtitle}>Coming next...</p>
-            <div style={{ marginTop: '2rem', padding: '1.5rem', background: 'var(--color-background)', borderRadius: '8px', border: '1px solid var(--color-border)' }}>
-              <div style={{ fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--color-text-secondary)', marginBottom: '1rem' }}>
-                Testing & Development
+        {step === 'dashboard' && budget && summary && (
+          <>
+            {/* Month Navigation */}
+            {budgetHistory.length > 0 && (
+              <div style={{ maxWidth: '1200px', margin: '0 auto 2rem auto' }}>
+                <MonthNavigation
+                  budgets={budgetHistory}
+                  currentBudgetId={selectedBudgetId}
+                  onMonthChange={loadBudgetById}
+                />
               </div>
+            )}
+
+            {/* Show notification only for current month */}
+            {uncategorizedTxns.length > 0 && budgetHistory.find(b => b.id === selectedBudgetId)?.is_active && (
+              <div style={{
+                maxWidth: '1200px',
+                margin: '0 auto 2rem auto',
+                padding: '1.5rem',
+                background: 'var(--color-accent-light)',
+                border: '1px solid var(--color-accent)',
+                borderRadius: '8px'
+              }}>
+                <div style={{
+                  fontSize: '14px',
+                  fontWeight: '500',
+                  color: 'var(--color-text-primary)',
+                  marginBottom: '0.5rem'
+                }}>
+                  {uncategorizedTxns.length} New Transaction{uncategorizedTxns.length !== 1 ? 's' : ''} to Categorize
+                </div>
+                <div style={{
+                  fontSize: '13px',
+                  color: 'var(--color-text-secondary)',
+                  marginBottom: '1rem'
+                }}>
+                  You have new transactions that need to be categorized to track your spending.
+                </div>
+                <button
+                  onClick={() => {
+                    const config = {
+                      periodType: budget.period_type,
+                      hasMonthlyObligations: budget.has_monthly_obligations,
+                      periodStartDate: budget.period_start_date
+                    };
+                    setPeriodConfig(config);
+                    
+                    api.get('/budget/categories').then(res => {
+                      setCategories(res.data);
+                      setCurrentTxnIndex(0);
+                      setStep('categorization');
+                    });
+                  }}
+                  style={styles.button}
+                >
+                  Categorize Now
+                </button>
+              </div>
+            )}
+
+            <BudgetDashboard budget={budget} summary={summary} />
+
+            {/* View Transactions Button */}
+            <div style={{ maxWidth: '1200px', margin: '2rem auto', textAlign: 'center' }}>
               <button
-                onClick={resetEverything}
+                onClick={loadCurrentMonthTransactions}
                 style={{
                   ...styles.button,
-                  background: '#dc3545',
-                  fontSize: '12px',
-                  padding: '10px 20px'
+                  background: 'transparent',
+                  border: '1px solid var(--color-border)',
+                  color: 'var(--color-text-primary)',
+                  padding: '12px 24px'
                 }}
               >
-                Reset Everything & Start Over
+                View All Transactions
               </button>
-              <p style={{ fontSize: '11px', color: 'var(--color-text-secondary)', marginTop: '0.75rem', lineHeight: '1.5' }}>
-                This will completely reset your budget setup and allow you to go through the entire flow again from the beginning.
-              </p>
             </div>
-          </div>
+
+            {/* Reset button - only show for current month */}
+            {budgetHistory.find(b => b.id === selectedBudgetId)?.is_active && (
+              <div style={{ maxWidth: '1200px', margin: '2rem auto', textAlign: 'center' }}>
+                <button
+                  onClick={resetEverything}
+                  style={{
+                    ...styles.button,
+                    background: '#dc3545',
+                    fontSize: '12px',
+                    padding: '10px 20px'
+                  }}
+                >
+                  Reset Everything
+                </button>
+              </div>
+            )}
+
+            {/* Transactions Modal */}
+            {showTransactions && (
+              <TransactionsList
+                transactions={currentMonthTransactions}
+                categories={categories}
+                onRecategorize={handleRecategorize}
+                onClose={() => setShowTransactions(false)}
+              />
+            )}
+          </>
         )}
       </div>
     </div>

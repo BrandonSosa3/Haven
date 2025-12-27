@@ -85,13 +85,7 @@ function TransactionCategorizer({
   // - Budget is weekly/biweekly
   // - Monthly obligations are enabled
   // - Transaction is not income or ignore
-  const needsPeriodSelection = 
-    !isIncome && 
-    selectedBucket && 
-    selectedBucket !== 'ignore' && 
-    selectedBucket !== 'income' &&
-    (periodType === 'weekly' || periodType === 'biweekly') &&
-    hasMonthlyObligations;
+  const needsPeriodSelection = false; 
 
   // Can submit if:
   // - Bucket is selected
@@ -347,7 +341,7 @@ function TransactionCategorizer({
         </div>
 
         {/* Step 2: Category Selection */}
-        {selectedBucket && selectedBucket !== 'ignore' && selectedBucket !== 'income' && (
+        {selectedBucket && selectedBucket !== 'ignore' && (
           <div style={styles.section}>
             <div style={styles.sectionTitle}>Choose or Create Category</div>
             <div style={styles.categoryList}>
@@ -400,33 +394,6 @@ function TransactionCategorizer({
                   </button>
                 </div>
               )}
-            </div>
-          </div>
-        )}
-
-        {/* Step 3: Period Selection (if needed) */}
-        {needsPeriodSelection && (
-          <div style={styles.section}>
-            <div style={styles.sectionTitle}>Which budget period does this belong to?</div>
-            <div style={styles.grid}>
-              <div
-                onClick={() => setSelectedPeriod(periodType === 'weekly' ? 'weekly' : 'biweekly')}
-                style={{
-                  ...styles.option,
-                  ...(selectedPeriod === (periodType === 'weekly' ? 'weekly' : 'biweekly') ? styles.optionActive : {})
-                }}
-              >
-                {periodType === 'weekly' ? 'Weekly' : 'Bi-weekly'} Budget
-              </div>
-              <div
-                onClick={() => setSelectedPeriod('monthly')}
-                style={{
-                  ...styles.option,
-                  ...(selectedPeriod === 'monthly' ? styles.optionActive : {})
-                }}
-              >
-                Monthly Budget
-              </div>
             </div>
           </div>
         )}

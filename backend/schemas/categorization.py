@@ -6,7 +6,7 @@ from typing import Optional
 
 class BudgetCategoryCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=50)
-    bucket: str = Field(..., pattern="^(needs|wants|savings)$")
+    bucket: str = Field(..., pattern="^(needs|wants|savings|income)$")
     icon: Optional[str] = None
     color: Optional[str] = None
 

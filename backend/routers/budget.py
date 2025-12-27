@@ -26,36 +26,49 @@ def check_budget_setup(
     db: Session = Depends(get_db)
 ):
     """Check if user has completed budget setup"""
+    from datetime import datetime
+    from dateutil.relativedelta import relativedelta
+    
+    # Check for active budget
     budget = db.query(Budget).filter(
         Budget.user_id == current_user.id,
         Budget.is_active == True
     ).first()
     
-    # Calculate last full month date range
-    now = datetime.now()
-    if now.month == 1:
-        last_full_month = 12
-        last_full_year = now.year - 1
+    # Determine which month we should be working with
+    today = datetime.now()
+    
+    # If it's early in the month (first 5 days), we might still be setting up last month
+    if today.day <= 5:
+        target_month_start = (today.replace(day=1) - relativedelta(months=1)).replace(day=1)
     else:
-        last_full_month = now.month - 1
-        last_full_year = now.year
+        target_month_start = today.replace(day=1)
     
-    first_day = datetime(last_full_year, last_full_month, 1)
-    last_day_num = monthrange(last_full_year, last_full_month)[1]
-    last_day = datetime(last_full_year, last_full_month, last_day_num, 23, 59, 59)
+    target_month_end = (target_month_start + relativedelta(months=1)).replace(day=1) - relativedelta(days=1)
     
-    # Check if user has uncategorized transactions from last full month
+    print(f"[BUDGET CHECK] Today: {today}")
+    print(f"[BUDGET CHECK] Target month: {target_month_start} to {target_month_end}")
+    
+    # Check for uncategorized transactions in target month
     uncategorized = db.query(Transaction).filter(
         Transaction.user_id == current_user.id,
         Transaction.user_bucket.is_(None),
-        Transaction.date >= first_day,
-        Transaction.date <= last_day
+        Transaction.date >= target_month_start,
+        Transaction.date <= today  # Only up to today
     ).count()
+    
+    print(f"[BUDGET CHECK] Uncategorized count: {uncategorized}")
+    print(f"[BUDGET CHECK] Has budget: {budget is not None}")
     
     return {
         "has_budget": budget is not None,
         "needs_categorization": uncategorized > 0,
-        "uncategorized_count": uncategorized
+        "uncategorized_count": uncategorized,
+        "target_month": {
+            "start": target_month_start.isoformat(),
+            "end": target_month_end.isoformat(),
+            "name": target_month_start.strftime("%B %Y")
+        }
     }
 
 
@@ -64,29 +77,47 @@ def get_uncategorized_transactions(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Get transactions that need categorization from the last full month"""
-    now = datetime.now()
+    """Get transactions that need categorization for budget setup"""
+    from datetime import datetime
+    from dateutil.relativedelta import relativedelta
     
-    # Calculate last full month
-    # If current month is January, last full month is December of previous year
-    if now.month == 1:
-        last_full_month = 12
-        last_full_year = now.year - 1
+    today = datetime.now()
+    
+    # Determine target month for budget setup
+    # If no budget exists, use last full month for initial setup
+    budget = db.query(Budget).filter(
+        Budget.user_id == current_user.id,
+        Budget.is_active == True
+    ).first()
+    
+    if not budget:
+        # First time setup - use last full month (November if we're in December)
+        if today.month == 1:
+            target_start = datetime(today.year - 1, 12, 1)
+            target_end = datetime(today.year - 1, 12, 31, 23, 59, 59)
+        else:
+            target_start = datetime(today.year, today.month - 1, 1)
+            # Last day of previous month
+            target_end = (today.replace(day=1) - relativedelta(days=1)).replace(hour=23, minute=59, second=59)
+        
+        print(f"[UNCATEGORIZED] First time setup - using previous month")
+        print(f"[UNCATEGORIZED] Range: {target_start} to {target_end}")
     else:
-        last_full_month = now.month - 1
-        last_full_year = now.year
-    
-    # Get first and last day of last full month
-    first_day = datetime(last_full_year, last_full_month, 1)
-    last_day_num = monthrange(last_full_year, last_full_month)[1]
-    last_day = datetime(last_full_year, last_full_month, last_day_num, 23, 59, 59)
+        # Budget exists - get current month transactions up to today
+        target_start = today.replace(day=1, hour=0, minute=0, second=0)
+        target_end = today.replace(hour=23, minute=59, second=59)
+        
+        print(f"[UNCATEGORIZED] Existing budget - using current month to date")
+        print(f"[UNCATEGORIZED] Range: {target_start} to {target_end}")
     
     transactions = db.query(Transaction).filter(
         Transaction.user_id == current_user.id,
         Transaction.user_bucket.is_(None),
-        Transaction.date >= first_day,
-        Transaction.date <= last_day
+        Transaction.date >= target_start,
+        Transaction.date <= target_end
     ).order_by(Transaction.date.desc()).all()
+    
+    print(f"[UNCATEGORIZED] Found {len(transactions)} transactions")
     
     return [{
         "id": str(t.id),
@@ -303,6 +334,43 @@ def create_budget(
     
     return budget
 
+@router.patch("/current/period-dates")
+def update_budget_period_dates(
+    period_start_date: datetime,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Update the period dates for the current budget"""
+    budget = db.query(Budget).filter(
+        Budget.user_id == current_user.id,
+        Budget.is_active == True
+    ).first()
+    
+    if not budget:
+        raise HTTPException(status_code=404, detail="No active budget found")
+    
+    # Calculate next period date based on period type
+    if budget.period_type == "weekly":
+        next_period = period_start_date + timedelta(weeks=1)
+    elif budget.period_type == "biweekly":
+        next_period = period_start_date + timedelta(weeks=2)
+    else:  # monthly
+        next_period = period_start_date + timedelta(days=30)
+    
+    budget.period_start_date = period_start_date
+    budget.next_period_date = next_period
+    
+    db.commit()
+    db.refresh(budget)
+    
+    print(f"[BUDGET] Updated period dates: {period_start_date} to {next_period}")
+    
+    return {
+        "message": "Period dates updated successfully",
+        "period_start_date": budget.period_start_date.isoformat(),
+        "next_period_date": budget.next_period_date.isoformat()
+    }
+
 
 @router.get("/current", response_model=BudgetResponse)
 def get_current_budget(
@@ -421,33 +489,186 @@ def get_budget_summary(
     transactions = db.query(Transaction).filter(
         Transaction.user_id == current_user.id,
         Transaction.user_bucket.isnot(None),
-        Transaction.date >= budget.period_start_date
+        Transaction.date >= budget.period_start_date,
+        Transaction.date <= datetime.now()
     ).all()
     
-    # Calculate spending by bucket and period
-    weekly_needs = sum(abs(float(t.amount)) for t in transactions 
-                       if t.user_bucket == "needs" and t.budget_period == "weekly")
-    weekly_wants = sum(abs(float(t.amount)) for t in transactions 
-                       if t.user_bucket == "wants" and t.budget_period == "weekly")
-    weekly_savings = sum(abs(float(t.amount)) for t in transactions 
-                         if t.user_bucket == "savings" and t.budget_period == "weekly")
+    print(f"[BUDGET SUMMARY] Found {len(transactions)} transactions in period")
     
-    monthly_needs = sum(abs(float(t.amount)) for t in transactions 
-                        if t.user_bucket == "needs" and t.budget_period == "monthly")
-    monthly_wants = sum(abs(float(t.amount)) for t in transactions 
-                        if t.user_bucket == "wants" and t.budget_period == "monthly")
-    monthly_savings = sum(abs(float(t.amount)) for t in transactions 
-                          if t.user_bucket == "savings" and t.budget_period == "monthly")
+    # Calculate spending by bucket (only negative amounts)
+    needs_spending = sum(abs(float(t.amount)) for t in transactions 
+                        if t.user_bucket == "needs" and float(t.amount) < 0)
+    wants_spending = sum(abs(float(t.amount)) for t in transactions 
+                        if t.user_bucket == "wants" and float(t.amount) < 0)
+    savings_spending = sum(abs(float(t.amount)) for t in transactions 
+                          if t.user_bucket == "savings" and float(t.amount) < 0)
     
-    # Income (all pooled)
-    total_income = sum(float(t.amount) for t in transactions 
-                       if t.user_bucket == "income" and float(t.amount) > 0)
+    print(f"[BUDGET SUMMARY] Needs: {needs_spending}, Wants: {wants_spending}, Savings: {savings_spending}")
     
-    # Category breakdown
+    # Income (positive amounts)
+    total_income = sum(abs(float(t.amount)) for t in transactions 
+                    if t.user_bucket == "income" and float(t.amount) > 0)
+
+    print(f"[BUDGET SUMMARY] Income: {total_income}")
+
+    # Category breakdown for spending
     category_spending = {}
     for t in transactions:
         if t.user_category and float(t.amount) < 0:
-            key = f"{t.user_bucket}_{t.budget_period}_{t.user_category}"
+            key = f"{t.user_bucket}_{t.user_category}"
+            category_spending[key] = category_spending.get(key, 0) + abs(float(t.amount))
+
+    # Income category breakdown
+    income_categories = {}
+    for t in transactions:
+        if t.user_bucket == "income" and float(t.amount) > 0:
+            category = t.user_category if t.user_category else "Uncategorized"
+            income_categories[category] = income_categories.get(category, 0) + abs(float(t.amount))
+
+    print(f"[BUDGET SUMMARY] Income categories: {income_categories}")
+    print(f"[BUDGET SUMMARY] Spending categories: {category_spending}")
+    for t in transactions:
+        if t.user_category and float(t.amount) < 0:
+            key = f"{t.user_bucket}_{t.user_category}"
+            category_spending[key] = category_spending.get(key, 0) + abs(float(t.amount))
+    
+    print(f"[BUDGET SUMMARY] Categories: {category_spending}")
+    
+    return {
+        "budget": {
+            "period_type": budget.period_type,
+            "has_monthly_obligations": budget.has_monthly_obligations,
+            "total_income": float(budget.total_income),
+            "needs_target": float(budget.total_income * budget.needs_percentage / 100),
+            "wants_target": float(budget.total_income * budget.wants_percentage / 100),
+            "savings_target": float(budget.total_income * budget.savings_percentage / 100)
+        },
+        "spending": {
+            "needs": needs_spending,
+            "wants": wants_spending,
+            "savings": savings_spending,
+            "total": needs_spending + wants_spending + savings_spending
+        },
+        "income": {
+            "total": total_income,
+            "categories": income_categories
+        },
+        "category_spending": category_spending
+    }
+
+@router.post("/reset-all")
+def reset_all_budget_data(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Reset all budget data - deactivate budgets and clear categorizations"""
+    
+    # Deactivate all budgets
+    budgets = db.query(Budget).filter(Budget.user_id == current_user.id).all()
+    for budget in budgets:
+        budget.is_active = False
+    
+    # Clear all transaction categorizations
+    transactions = db.query(Transaction).filter(Transaction.user_id == current_user.id).all()
+    reset_count = 0
+    for txn in transactions:
+        if txn.user_bucket is not None:
+            txn.user_bucket = None
+            txn.user_category = None
+            txn.budget_period = None
+            reset_count += 1
+    
+    # Delete all categories
+    categories = db.query(BudgetCategory).filter(BudgetCategory.user_id == current_user.id).all()
+    category_count = len(categories)
+    for cat in categories:
+        db.delete(cat)
+    
+    db.commit()
+    
+    print(f"[BUDGET] Reset complete: {len(budgets)} budgets, {reset_count} transactions, {category_count} categories")
+    
+    return {
+        "message": "All budget data reset successfully",
+        "budgets_deactivated": len(budgets),
+        "transactions_reset": reset_count,
+        "categories_deleted": category_count
+    }
+
+@router.get("/history")
+def get_budget_history(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get all budgets for the user, ordered by most recent first"""
+    budgets = db.query(Budget).filter(
+        Budget.user_id == current_user.id
+    ).order_by(Budget.period_start_date.desc()).all()
+    
+    history = []
+    for budget in budgets:
+        # Get month name from period_start_date
+        month_name = budget.period_start_date.strftime("%B %Y")
+        
+        history.append({
+            "id": str(budget.id),
+            "month": month_name,
+            "period_start": budget.period_start_date.isoformat(),
+            "period_end": budget.next_period_date.isoformat(),
+            "is_active": budget.is_active,
+            "total_income": float(budget.total_income)
+        })
+    
+    return history
+
+
+@router.get("/{budget_id}/summary")
+def get_budget_summary_by_id(
+    budget_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get summary for a specific budget (for viewing past months)"""
+    budget = db.query(Budget).filter(
+        Budget.id == budget_id,
+        Budget.user_id == current_user.id
+    ).first()
+    
+    if not budget:
+        raise HTTPException(status_code=404, detail="Budget not found")
+    
+    # Get all categorized transactions for this period
+    transactions = db.query(Transaction).filter(
+        Transaction.user_id == current_user.id,
+        Transaction.user_bucket.isnot(None),
+        Transaction.date >= budget.period_start_date,
+        Transaction.date < budget.next_period_date
+    ).all()
+    
+    # Calculate spending by bucket
+    needs_spending = sum(abs(float(t.amount)) for t in transactions 
+                        if t.user_bucket == "needs" and float(t.amount) < 0)
+    wants_spending = sum(abs(float(t.amount)) for t in transactions 
+                        if t.user_bucket == "wants" and float(t.amount) < 0)
+    savings_spending = sum(abs(float(t.amount)) for t in transactions 
+                          if t.user_bucket == "savings" and float(t.amount) < 0)
+    
+    # Income
+    total_income = sum(abs(float(t.amount)) for t in transactions 
+                       if t.user_bucket == "income" and float(t.amount) > 0)
+    
+    # Income category breakdown
+    income_categories = {}
+    for t in transactions:
+        if t.user_bucket == "income" and float(t.amount) > 0:
+            category = t.user_category if t.user_category else "Uncategorized"
+            income_categories[category] = income_categories.get(category, 0) + abs(float(t.amount))
+    
+    # Category breakdown for spending
+    category_spending = {}
+    for t in transactions:
+        if t.user_category and float(t.amount) < 0:
+            key = f"{t.user_bucket}_{t.user_category}"
             category_spending[key] = category_spending.get(key, 0) + abs(float(t.amount))
     
     return {
@@ -459,22 +680,167 @@ def get_budget_summary(
             "wants_target": float(budget.total_income * budget.wants_percentage / 100),
             "savings_target": float(budget.total_income * budget.savings_percentage / 100)
         },
-        "period_spending": {
-            "weekly": {
-                "needs": weekly_needs,
-                "wants": weekly_wants,
-                "savings": weekly_savings,
-                "total": weekly_needs + weekly_wants + weekly_savings
-            },
-            "monthly": {
-                "needs": monthly_needs,
-                "wants": monthly_wants,
-                "savings": monthly_savings,
-                "total": monthly_needs + monthly_wants + monthly_savings
-            }
+        "spending": {
+            "needs": needs_spending,
+            "wants": wants_spending,
+            "savings": savings_spending,
+            "total": needs_spending + wants_spending + savings_spending
         },
         "income": {
-            "total": total_income
+            "total": total_income,
+            "categories": income_categories
         },
         "category_spending": category_spending
+    }
+
+@router.post("/create-historical/{year}/{month}")
+def create_historical_budget(
+    year: int,
+    month: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Create a budget for a specific past month based on that month's transactions"""
+    from calendar import monthrange
+    
+    # Calculate period dates
+    period_start = datetime(year, month, 1)
+    last_day = monthrange(year, month)[1]
+    period_end = datetime(year, month, last_day, 23, 59, 59)
+    
+    # Get all transactions for that month
+    transactions = db.query(Transaction).filter(
+        Transaction.user_id == current_user.id,
+        Transaction.user_bucket.isnot(None),
+        Transaction.date >= period_start,
+        Transaction.date <= period_end
+    ).all()
+    
+    # Calculate total income for that month
+    total_income = sum(abs(float(t.amount)) for t in transactions 
+                       if t.user_bucket == "income" and float(t.amount) > 0)
+    
+    if total_income == 0:
+        total_income = 1000  # Default
+    
+    # Check if budget already exists for this month
+    existing = db.query(Budget).filter(
+        Budget.user_id == current_user.id,
+        Budget.period_start_date >= period_start,
+        Budget.period_start_date < period_end
+    ).first()
+    
+    if existing:
+        raise HTTPException(status_code=400, detail=f"Budget already exists for {year}-{month}")
+    
+    # Create budget
+    budget = Budget(
+        user_id=current_user.id,
+        period_type='monthly',
+        has_monthly_obligations=False,
+        period_start_date=period_start,
+        next_period_date=period_end,
+        total_income=total_income,
+        needs_percentage=50,
+        wants_percentage=30,
+        savings_percentage=20,
+        is_active=False  # Historical budgets are not active
+    )
+    
+    db.add(budget)
+    db.commit()
+    db.refresh(budget)
+    
+    print(f"[BUDGET] Created historical budget for {year}-{month}: ${total_income}")
+    
+    return {
+        "message": f"Historical budget created for {period_start.strftime('%B %Y')}",
+        "budget_id": str(budget.id),
+        "total_income": float(total_income)
+    }
+@router.post("/auto-create-current-month")
+def auto_create_current_month_budget(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Auto-create budget for current month if it doesn't exist"""
+    from calendar import monthrange
+    
+    now = datetime.now()
+    current_month = now.month
+    current_year = now.year
+    
+    # Check if budget already exists for current month
+    period_start = datetime(current_year, current_month, 1)
+    last_day = monthrange(current_year, current_month)[1]
+    period_end = datetime(current_year, current_month, last_day, 23, 59, 59)
+    
+    existing = db.query(Budget).filter(
+        Budget.user_id == current_user.id,
+        Budget.period_start_date >= period_start,
+        Budget.period_start_date <= period_end
+    ).first()
+    
+    if existing:
+        return {
+            "message": "Budget already exists for current month",
+            "budget_id": str(existing.id),
+            "created": False
+        }
+    
+    # Get last month's income for estimate
+    if current_month == 1:
+        last_month = 12
+        last_year = current_year - 1
+    else:
+        last_month = current_month - 1
+        last_year = current_year
+    
+    last_month_start = datetime(last_year, last_month, 1)
+    last_month_last_day = monthrange(last_year, last_month)[1]
+    last_month_end = datetime(last_year, last_month, last_month_last_day, 23, 59, 59)
+    
+    # Get last month's income
+    last_month_transactions = db.query(Transaction).filter(
+        Transaction.user_id == current_user.id,
+        Transaction.user_bucket == "income",
+        Transaction.date >= last_month_start,
+        Transaction.date <= last_month_end
+    ).all()
+    
+    total_income = sum(abs(float(t.amount)) for t in last_month_transactions if float(t.amount) > 0)
+    
+    if total_income == 0:
+        total_income = 1000  # Default
+    
+    # Deactivate all previous budgets
+    db.query(Budget).filter(
+        Budget.user_id == current_user.id
+    ).update({"is_active": False})
+    
+    # Create new budget for current month
+    budget = Budget(
+        user_id=current_user.id,
+        period_type='monthly',
+        has_monthly_obligations=False,
+        period_start_date=period_start,
+        next_period_date=period_end,
+        total_income=total_income,
+        needs_percentage=50,
+        wants_percentage=30,
+        savings_percentage=20,
+        is_active=True
+    )
+    
+    db.add(budget)
+    db.commit()
+    db.refresh(budget)
+    
+    print(f"[BUDGET] Auto-created budget for {period_start.strftime('%B %Y')}: ${total_income}")
+    
+    return {
+        "message": f"Budget created for {period_start.strftime('%B %Y')}",
+        "budget_id": str(budget.id),
+        "total_income": float(total_income),
+        "created": True
     }

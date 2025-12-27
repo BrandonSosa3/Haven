@@ -11,8 +11,8 @@ class BudgetPeriodSetup(BaseModel):
 
 
 class BudgetCategoryCreate(BaseModel):
-    name: str = Field(..., min_length=1, max_length=50)
-    bucket: Literal["needs", "wants", "savings"]
+    name: str
+    bucket: Literal["needs", "wants", "savings", "income"]  # Add "income" here
 
 
 class BudgetCreate(BaseModel):
@@ -45,7 +45,8 @@ class BudgetResponse(BaseModel):
 class BudgetCategoryResponse(BaseModel):
     id: UUID
     name: str
-    bucket: str
+    bucket: Literal["needs", "wants", "savings", "income"]  # Add "income" here
+    user_id: UUID
     created_at: datetime
     
     class Config:
